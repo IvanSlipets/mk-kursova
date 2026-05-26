@@ -515,12 +515,19 @@ function buildChartData(rows) {
   
   rows.forEach(r => {
     const d = new Date(r.timestamp);
-    const coeff = 1000 * 60 * 5;
+    const coeff = 1000 * 60 * 5;                    // 5-хвилинне усереднення
     const rounded = new Date(Math.round(d.getTime() / coeff) * coeff);
     const key = rounded.toISOString();
 
-    if (!map[key]) map[key] = {};
-    map[key][r.city] = { temp: r.temp_c, hum: r.humidity_pct };
+    if (!map[key]) map[key] = { Lv: null, Zh: null, Room: null };
+
+    if (r.city === "Lv") {
+      map[key].Lv = { temp: r.temp_c, hum: r.humidity_pct };
+    } else if (r.city === "Zh") {
+      map[key].Zh = { temp: r.temp_c, hum: r.humidity_pct };
+    } else if (r.city === "Room") {
+      map[key].Room = { temp: r.temp_c, hum: r.humidity_pct };
+    }
   });
 
   const keys = Object.keys(map).sort();
@@ -532,7 +539,8 @@ function buildChartData(rows) {
   
   chartData.Lv_temp = keys.map(k => map[k].Lv ? parseFloat(map[k].Lv.temp) : null);
   chartData.Zh_temp = keys.map(k => map[k].Zh ? parseFloat(map[k].Zh.temp) : null);
-  chartData.Rm_temp = keys.map(k => map[k].Rm ? parseFloat(map[k].Rm.temp) : null);
+  chartData.Rm_temp = keys.map(k => map[k].Room ? parseFloat(map[k].Room.temp) : null);
+  
   chartData.Lv_hum  = keys.map(k => map[k].Lv ? map[k].Lv.hum : null);
   chartData.Zh_hum  = keys.map(k => map[k].Zh ? map[k].Zh.hum : null);
 }
