@@ -3,16 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Meteo · Lviv / Zhovkva</title>
+  <title>Meteo · Lviv / Zhovkva / Room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    :root {
-      --supabase-url: "https://XXXXXXXXXXXXXXXX.supabase.co";
-      --supabase-key: "eyJhbGciOi...";
-    }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -30,6 +25,7 @@
       --text-dim:  #4a5a78;
       --glow-a:    0 0 20px #f0a50066, 0 0 40px #f0a50033;
       --glow-c:    0 0 20px #00d9ff55, 0 0 40px #00d9ff22;
+      --glow-m:    0 0 20px #00ffb355, 0 0 40px #00ffb322;
     }
 
     html, body {
@@ -40,7 +36,6 @@
       overflow-x: hidden;
     }
 
-    /* ── Scanline overlay ──────────────────────────────────────────── */
     body::before {
       content: '';
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -53,7 +48,6 @@
       );
     }
 
-    /* ── Grid noise ───────────────────────────────────────────────── */
     body::after {
       content: '';
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -62,7 +56,6 @@
         radial-gradient(ellipse 60% 40% at 80% 110%, rgba(240,165,0,0.06) 0%, transparent 60%);
     }
 
-    /* ── Layout ────────────────────────────────────────────────────── */
     .page {
       position: relative; z-index: 1;
       max-width: 1100px;
@@ -71,7 +64,6 @@
       display: flex; flex-direction: column; gap: 24px;
     }
 
-    /* ── Header ─────────────────────────────────────────────────────── */
     header {
       display: flex; align-items: center; justify-content: space-between;
       flex-wrap: wrap; gap: 12px;
@@ -110,9 +102,11 @@
       50% { opacity: 0.3; }
     }
 
-    /* ── City Cards ─────────────────────────────────────────────────── */
-    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+    .cards { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+      gap: 16px; 
+    }
 
     .card {
       background: var(--bg2);
@@ -156,9 +150,13 @@
       line-height: 1;
       letter-spacing: -0.02em;
     }
+    #temp-Rm {
+      color: var(--mint);
+      text-shadow: var(--glow-m);
+    }
     .card-temp .unit {
       font-size: 0.45em; font-weight: 400;
-      color: var(--amber-dim);
+      color: var(--text-dim);
       vertical-align: super;
       text-shadow: none;
     }
@@ -193,7 +191,6 @@
       letter-spacing: 0.05em;
     }
 
-    /* corner decorations */
     .card .corner {
       position: absolute;
       width: 12px; height: 12px;
@@ -204,7 +201,6 @@
     .corner.tl { top: 8px; left: 8px;  border-width: 1px 0 0 1px; }
     .corner.br { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
 
-    /* ── Refresh Bar ────────────────────────────────────────────────── */
     .refresh-wrap {
       display: flex; align-items: center; gap: 12px;
       font-size: 0.7rem; color: var(--text-dim);
@@ -222,7 +218,6 @@
     }
     #countdown { min-width: 40px; text-align: right; color: var(--amber); }
 
-    /* ── Chart Section ──────────────────────────────────────────────── */
     .chart-section {
       background: var(--bg2);
       border: 1px solid var(--border);
@@ -270,7 +265,6 @@
 
     .chart-canvas-wrap { position: relative; height: 240px; }
 
-    /* ── Status bar ─────────────────────────────────────────────────── */
     .status-bar {
       display: flex; gap: 20px; flex-wrap: wrap;
       font-size: 0.65rem; color: var(--text-dim);
@@ -280,7 +274,6 @@
     }
     .status-bar span { color: var(--text); }
 
-    /* ── Skeleton ───────────────────────────────────────────────────── */
     .skel {
       background: linear-gradient(90deg, var(--border) 25%, #1e2e4a 50%, var(--border) 75%);
       background-size: 200% 100%;
@@ -292,7 +285,6 @@
       100% { background-position: -200% 0; }
     }
 
-    /* ── Error banner ───────────────────────────────────────────────── */
     .error-banner {
       background: rgba(255,69,102,0.1);
       border: 1px solid rgba(255,69,102,0.3);
@@ -308,7 +300,6 @@
 <body>
 <div class="page">
 
-  <!-- ── Header ────────────────────────────────────────────────────────── -->
   <header>
     <div class="logo">METEO<span>·</span>UA</div>
     <div class="header-right">
@@ -320,10 +311,8 @@
     </div>
   </header>
 
-  <!-- ── Error Banner ──────────────────────────────────────────────────── -->
   <div class="error-banner" id="errorBanner"></div>
 
-  <!-- ── City Cards ────────────────────────────────────────────────────── -->
   <div class="cards">
     <div class="card" id="card-Lv">
       <div class="corner tl"></div><div class="corner br"></div>
@@ -348,22 +337,33 @@
       </div>
       <div class="card-ts" id="ts-Zh">очікування даних...</div>
     </div>
+
+    <div class="card" id="card-Rm">
+      <div class="corner tl"></div><div class="corner br"></div>
+      <div class="card-label">КІМНАТА · RM</div>
+      <div class="card-temp" id="temp-Rm"><span class="skel" style="display:inline-block;width:120px;height:56px"></span></div>
+      <div class="card-hum" style="opacity: 0.25;">
+        <span class="hum-label">ВОЛОГІСТЬ</span>
+        <span class="hum-value" id="hum-Rm">—</span>
+        <div class="hum-bar"><div class="hum-fill" id="humbar-Rm" style="width:0%"></div></div>
+      </div>
+      <div class="card-ts" id="ts-Rm">очікування даних...</div>
+    </div>
   </div>
 
-  <!-- ── Refresh progress ──────────────────────────────────────────────── -->
   <div class="refresh-wrap">
     <span>наст. оновлення</span>
     <div class="refresh-track"><div class="refresh-fill" id="refreshFill" style="width:100%"></div></div>
     <span id="countdown">5s</span>
   </div>
 
-  <!-- ── Chart ─────────────────────────────────────────────────────────── -->
   <div class="chart-section">
     <div class="chart-header">
       <div class="chart-title">ГРАФІК · ОСТАННІ 24 ГОД</div>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:#f0a500"></div>Lviv</div>
         <div class="legend-item"><div class="legend-dot" style="background:#00d9ff"></div>Zhovkva</div>
+        <div class="legend-item" id="legendRm"><div class="legend-dot" style="background:#00ffb3"></div>Room</div>
       </div>
     </div>
     <div class="chart-tabs">
@@ -375,7 +375,6 @@
     </div>
   </div>
 
-  <!-- ── Status bar ────────────────────────────────────────────────────── -->
   <div class="status-bar">
     <div>ЗАПИСІВ У БД: <span id="totalRows">—</span></div>
     <div>ЗАПИСІВ ЗА 24Г: <span id="rows24h">—</span></div>
@@ -398,7 +397,7 @@ const REFRESH_SEC = 5;
 // ════════════════════════════════════════════════════════════════════
 let currentTab = 'temp';
 let chartInstance = null;
-let chartData = { labels: [], Lv_temp: [], Zh_temp: [], Lv_hum: [], Zh_hum: [] };
+let chartData = { labels: [], Lv_temp: [], Zh_temp: [], Rm_temp: [], Lv_hum: [], Zh_hum: [] };
 let countdown = REFRESH_SEC;
 let firstLoad = true;
 
@@ -421,11 +420,11 @@ async function supa(endpoint) {
 // ════════════════════════════════════════════════════════════════════
 async function fetchData() {
   try {
-    const [latestLv, latestZh, history, countAll, count24h] = await Promise.all([
+    const [latestLv, latestZh, latestRm, history, count24h] = await Promise.all([
       supa('weather_logs?select=*&city=eq.Lv&order=created_at.desc&limit=1'),
       supa('weather_logs?select=*&city=eq.Zh&order=created_at.desc&limit=1'),
-      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=288'),
-      supa('weather_logs?select=id&limit=1&offset=0'),
+      supa('weather_logs?select=*&city=eq.Rm&order=created_at.desc&limit=1'),
+      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=432'),
       supa(`weather_logs?select=id&created_at=gte.${new Date(Date.now()-86400000).toISOString()}`)
     ]);
 
@@ -435,11 +434,12 @@ async function fetchData() {
     // Картки
     if (latestLv.length) updateCard('Lv', latestLv[0]);
     if (latestZh.length) updateCard('Zh', latestZh[0]);
+    if (latestRm.length) updateCard('Rm', latestRm[0]);
 
     // Статистика
     document.getElementById('rows24h').textContent = count24h.length;
 
-    // Граф
+    // Графік
     buildChartData(history);
     updateChart();
 
@@ -456,7 +456,6 @@ async function fetchData() {
   }
 }
 
-// Count total rows
 async function fetchTotalCount() {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/weather_logs?select=id`, {
@@ -487,8 +486,14 @@ function updateCard(city, row) {
 
   const sign = row.temp_c > 0 ? '+' : '';
   tempEl.innerHTML = `${sign}${parseFloat(row.temp_c).toFixed(1)}<span class="unit">°C</span>`;
-  humEl.textContent = `${row.humidity_pct}%`;
-  barEl.style.width = `${row.humidity_pct}%`;
+  
+  if (row.humidity_pct !== null && row.humidity_pct !== undefined) {
+    humEl.textContent = `${row.humidity_pct}%`;
+    barEl.style.width = `${row.humidity_pct}%`;
+  } else {
+    humEl.textContent = '—';
+    barEl.style.width = '0%';
+  }
 
   const ts = new Date(row.timestamp);
   tsEl.textContent = ts.toLocaleString('uk-UA', {
@@ -496,45 +501,14 @@ function updateCard(city, row) {
     hour:'2-digit', minute:'2-digit', second:'2-digit'
   });
 
-  // Flash effect
   cardEl.classList.remove('updated');
-  void cardEl.offsetWidth; // reflow
+  void cardEl.offsetWidth; 
   cardEl.classList.add('updated');
   setTimeout(() => cardEl.classList.remove('updated'), 1100);
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Chart
-// ════════════════════════════════════════════════════════════════════
-function buildChartData(rows) {
-  const map = {};
-  rows.forEach(r => {
-    const key = r.timestamp;
-    if (!map[key]) map[key] = {};
-    map[key][r.city] = { temp: r.temp_c, hum: r.humidity_pct };
-  });
-
-  const keys = Object.keys(map).sort();
-  chartData.labels    = keys.map(k => {
-    const d = new Date(k);
-    return d.toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'});
-  });
-  chartData.Lv_temp = keys.map(k => map[k].Lv ? parseFloat(map[k].Lv.temp) : null);
-  chartData.Zh_temp = keys.map(k => map[k].Zh ? parseFloat(map[k].Zh.temp) : null);
-  chartData.Lv_hum  = keys.map(k => map[k].Lv ? map[k].Lv.hum : null);
-  chartData.Zh_hum  = keys.map(k => map[k].Zh ? map[k].Zh.hum : null);
-}
-
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach((el, i) => {
-    el.classList.toggle('active', (i === 0 && tab === 'temp') || (i === 1 && tab === 'hum'));
-  });
-  updateChart();
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Chart
+//  Chart Data Processing
 // ════════════════════════════════════════════════════════════════════
 function buildChartData(rows) {
   const map = {};
@@ -558,6 +532,7 @@ function buildChartData(rows) {
   
   chartData.Lv_temp = keys.map(k => map[k].Lv ? parseFloat(map[k].Lv.temp) : null);
   chartData.Zh_temp = keys.map(k => map[k].Zh ? parseFloat(map[k].Zh.temp) : null);
+  chartData.Rm_temp = keys.map(k => map[k].Rm ? parseFloat(map[k].Rm.temp) : null);
   chartData.Lv_hum  = keys.map(k => map[k].Lv ? map[k].Lv.hum : null);
   chartData.Zh_hum  = keys.map(k => map[k].Zh ? map[k].Zh.hum : null);
 }
@@ -575,38 +550,59 @@ function updateChart() {
   const lvData = isTemp ? chartData.Lv_temp : chartData.Lv_hum;
   const zhData = isTemp ? chartData.Zh_temp : chartData.Zh_hum;
 
+  const datasets = [
+    {
+      label: 'Львів',
+      data: lvData,
+      borderColor: '#f0a500',
+      backgroundColor: 'rgba(240,165,0,0.03)',
+      borderWidth: 2,
+      pointRadius: 4,               
+      pointBackgroundColor: '#f0a500',
+      pointHoverRadius: 6,
+      tension: 0.2,                 
+      fill: true,
+      spanGaps: true,              
+    },
+    {
+      label: 'Жовква',
+      data: zhData,
+      borderColor: '#00d9ff',
+      backgroundColor: 'rgba(0,217,255,0.02)',
+      borderWidth: 2,
+      pointRadius: 4,         
+      pointBackgroundColor: '#00d9ff',
+      pointHoverRadius: 6,
+      tension: 0.2,
+      fill: true,
+      spanGaps: true,
+    }
+  ];
+
+  if (isTemp) {
+    datasets.push({
+      label: 'Кімната',
+      data: chartData.Rm_temp,
+      borderColor: '#00ffb3',
+      backgroundColor: 'rgba(0,255,179,0.01)',
+      borderWidth: 2,
+      pointRadius: 4,         
+      pointBackgroundColor: '#00ffb3',
+      pointHoverRadius: 6,
+      tension: 0.2,
+      fill: true,
+      spanGaps: true,
+    });
+    document.getElementById('legendRm').style.display = 'flex';
+  } else {
+    document.getElementById('legendRm').style.display = 'none';
+  }
+
   const chartCfg = {
     type: 'line',
     data: {
       labels: chartData.labels,
-      datasets: [
-        {
-          label: 'Львів',
-          data: lvData,
-          borderColor: '#f0a500',
-          backgroundColor: 'rgba(240,165,0,0.03)',
-          borderWidth: 2,
-          pointRadius: 4,               
-          pointBackgroundColor: '#f0a500',
-          pointHoverRadius: 6,
-          tension: 0.2,                 
-          fill: true,
-          spanGaps: true,              
-        },
-        {
-          label: 'Жовква',
-          data: zhData,
-          borderColor: '#00d9ff',
-          backgroundColor: 'rgba(0,217,255,0.02)',
-          borderWidth: 2,
-          pointRadius: 4,         
-          pointBackgroundColor: '#00d9ff',
-          pointHoverRadius: 6,
-          tension: 0.2,
-          fill: true,
-          spanGaps: true,
-        }
-      ]
+      datasets: datasets
     },
     options: {
       responsive: true,
