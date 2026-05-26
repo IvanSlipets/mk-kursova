@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meteo · Lviv / Zhovkva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Config ─── замінити на свої ──────────────────────────────── */
+    :root {
+      --supabase-url: "https://XXXXXXXXXXXXXXXX.supabase.co";
+      --supabase-key: "eyJhbGciOi...";
+    }
+
+    /* ── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #05080f;
+      --bg2:       #080d18;
+      --border:    #1a2540;
+      --amber:     #f0a500;
+      --amber-dim: #7a5200;
+      --cyan:      #00d9ff;
+      --cyan-dim:  #004f5e;
+      --mint:      #00ffb3;
+      --mint-dim:  #004030;
+      --red:       #ff4566;
+      --text:      #c8d8f0;
+      --text-dim:  #4a5a78;
+      --glow-a:    0 0 20px #f0a50066, 0 0 40px #f0a50033;
+      --glow-c:    0 0 20px #00d9ff55, 0 0 40px #00d9ff22;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    /* ── Scanline overlay ──────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.08) 3px,
+        rgba(0,0,0,0.08) 4px
+      );
+    }
+
+    /* ── Grid noise ───────────────────────────────────────────────── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,160,255,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 110%, rgba(240,165,0,0.06) 0%, transparent 60%);
+    }
+
+    /* ── Layout ────────────────────────────────────────────────────── */
+    .page {
+      position: relative; z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+
+    .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(1.2rem, 3vw, 1.9rem);
+      letter-spacing: 0.12em;
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
+    .logo span { color: var(--amber); text-shadow: var(--glow-a); }
+
+    .header-right {
+      display: flex; align-items: center; gap: 20px;
+      font-size: 0.78rem; color: var(--text-dim);
+    }
+
+    .live-dot {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 0.72rem; letter-spacing: 0.1em;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 8px var(--mint), 0 0 16px var(--mint);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); animation: none; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── City Cards ─────────────────────────────────────────────────── */
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.4s;
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.5;
+    }
+    .card.updated {
+      border-color: var(--amber);
+      animation: card-flash 1s ease-out forwards;
+    }
+    @keyframes card-flash {
+      0%   { box-shadow: 0 0 24px var(--amber-dim); }
+      100% { box-shadow: none; }
+    }
+
+    .card-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .card-temp {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2.8rem, 7vw, 4rem);
+      font-weight: 700;
+      color: var(--amber);
+      text-shadow: var(--glow-a);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .card-temp .unit {
+      font-size: 0.45em; font-weight: 400;
+      color: var(--amber-dim);
+      vertical-align: super;
+      text-shadow: none;
+    }
+
+    .card-hum {
+      margin-top: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .hum-label { font-size: 0.72rem; color: var(--text-dim); }
+    .hum-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.25rem;
+      color: var(--mint);
+      text-shadow: 0 0 12px var(--mint);
+    }
+    .hum-bar {
+      flex: 1; height: 4px;
+      background: var(--border);
+      border-radius: 2px; overflow: hidden;
+    }
+    .hum-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan-dim), var(--mint));
+      border-radius: 2px;
+      transition: width 1s ease;
+    }
+
+    .card-ts {
+      margin-top: 16px;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+
+    /* corner decorations */
+    .card .corner {
+      position: absolute;
+      width: 12px; height: 12px;
+      border-color: var(--cyan-dim);
+      border-style: solid;
+      opacity: 0.5;
+    }
+    .corner.tl { top: 8px; left: 8px;  border-width: 1px 0 0 1px; }
+    .corner.br { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+
+    /* ── Refresh Bar ────────────────────────────────────────────────── */
+    .refresh-wrap {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.7rem; color: var(--text-dim);
+    }
+    .refresh-track {
+      flex: 1; height: 2px;
+      background: var(--border);
+      border-radius: 1px; overflow: hidden;
+    }
+    .refresh-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+      border-radius: 1px;
+      transition: width 1s linear;
+    }
+    #countdown { min-width: 40px; text-align: right; color: var(--amber); }
+
+    /* ── Chart Section ──────────────────────────────────────────────── */
+    .chart-section {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 20px 24px;
+    }
+    .chart-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .chart-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      color: var(--text-dim);
+    }
+    .chart-legend {
+      display: flex; gap: 16px; font-size: 0.68rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    .chart-tabs {
+      display: flex; gap: 2px; margin-bottom: 16px;
+    }
+    .tab {
+      padding: 5px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab:first-child { border-radius: 3px 0 0 3px; }
+    .tab:last-child  { border-radius: 0 3px 3px 0; }
+    .tab.active {
+      background: var(--cyan-dim);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .chart-canvas-wrap { position: relative; height: 240px; }
+
+    /* ── Status bar ─────────────────────────────────────────────────── */
+    .status-bar {
+      display: flex; gap: 20px; flex-wrap: wrap;
+      font-size: 0.65rem; color: var(--text-dim);
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+      letter-spacing: 0.06em;
+    }
+    .status-bar span { color: var(--text); }
+
+    /* ── Skeleton ───────────────────────────────────────────────────── */
+    .skel {
+      background: linear-gradient(90deg, var(--border) 25%, #1e2e4a 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 3px;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Error banner ───────────────────────────────────────────────── */
+    .error-banner {
+      background: rgba(255,69,102,0.1);
+      border: 1px solid rgba(255,69,102,0.3);
+      border-radius: 4px;
+      padding: 10px 16px;
+      font-size: 0.74rem;
+      color: var(--red);
+      display: none;
+    }
+    .error-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">METEO<span>·</span>UA</div>
+    <div class="header-right">
+      <div class="live-dot">
+        <div class="dot" id="liveDot"></div>
+        <span id="liveLabel">LIVE</span>
+      </div>
+      <div id="lastFetch">—</div>
+    </div>
+  </header>
+
+  <!-- ── Error Banner ──────────────────────────────────────────────────── -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- ── City Cards ────────────────────────────────────────────────────── -->
+  <div class="cards">
+    <div class="card" id="card-Lv">
+      <div class="corner tl"></div><div class="corner br"></div>
+      <div class="card-label">ЛЬВІВ · LV</div>
+      <div class="card-temp" id="temp-Lv"><span class="skel" style="display:inline-block;width:120px;height:56px"></span></div>
+      <div class="card-hum">
+        <span class="hum-label">ВОЛОГІСТЬ</span>
+        <span class="hum-value" id="hum-Lv">—</span>
+        <div class="hum-bar"><div class="hum-fill" id="humbar-Lv" style="width:0%"></div></div>
+      </div>
+      <div class="card-ts" id="ts-Lv">очікування даних...</div>
+    </div>
+
+    <div class="card" id="card-Zh">
+      <div class="corner tl"></div><div class="corner br"></div>
+      <div class="card-label">ЖОВКВА · ZH</div>
+      <div class="card-temp" id="temp-Zh"><span class="skel" style="display:inline-block;width:120px;height:56px"></span></div>
+      <div class="card-hum">
+        <span class="hum-label">ВОЛОГІСТЬ</span>
+        <span class="hum-value" id="hum-Zh">—</span>
+        <div class="hum-bar"><div class="hum-fill" id="humbar-Zh" style="width:0%"></div></div>
+      </div>
+      <div class="card-ts" id="ts-Zh">очікування даних...</div>
+    </div>
+  </div>
+
+  <!-- ── Refresh progress ──────────────────────────────────────────────── -->
+  <div class="refresh-wrap">
+    <span>наст. оновлення</span>
+    <div class="refresh-track"><div class="refresh-fill" id="refreshFill" style="width:100%"></div></div>
+    <span id="countdown">5s</span>
+  </div>
+
+  <!-- ── Chart ─────────────────────────────────────────────────────────── -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">ГРАФІК · ОСТАННІ 24 ГОД</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#f0a500"></div>Lviv</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00d9ff"></div>Zhovkva</div>
+      </div>
+    </div>
+    <div class="chart-tabs">
+      <button class="tab active" onclick="switchTab('temp')">ТЕМПЕРАТУРА °C</button>
+      <button class="tab" onclick="switchTab('hum')">ВОЛОГІСТЬ %</button>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="meteoChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Status bar ────────────────────────────────────────────────────── -->
+  <div class="status-bar">
+    <div>ЗАПИСІВ У БД: <span id="totalRows">—</span></div>
+    <div>ЗАПИСІВ ЗА 24Г: <span id="rows24h">—</span></div>
+    <div>ДЖЕРЕЛО: <span>Supabase PostgreSQL</span></div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://vkfsbuxmagaykyrhefpt.supabase.co/rest/v1/';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZnNidXhtYWdheWt5cmhlZnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTIxNjcsImV4cCI6MjA5NTM2ODE2N30.N-ZoRxiqXQm39dIsg2nXGn2SacFkDBJIE0STWbxRVps';
+
+const REFRESH_SEC = 5;   // Інтервал оновлення в секундах
+
+// ════════════════════════════════════════════════════════════════════
+//  State
+// ════════════════════════════════════════════════════════════════════
+let currentTab = 'temp';
+let chartInstance = null;
+let chartData = { labels: [], Lv_temp: [], Zh_temp: [], Lv_hum: [], Zh_hum: [] };
+let countdown = REFRESH_SEC;
+let firstLoad = true;
+
+// ════════════════════════════════════════════════════════════════════
+//  Supabase fetch helper
+// ════════════════════════════════════════════════════════════════════
+async function supa(endpoint) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`
+    }
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Main data fetch
+// ════════════════════════════════════════════════════════════════════
+async function fetchData() {
+  try {
+    // Останній запис кожного міста
+    const [latestLv, latestZh, history, countAll, count24h] = await Promise.all([
+      supa('weather_logs?select=*&city=eq.Lv&order=created_at.desc&limit=1'),
+      supa('weather_logs?select=*&city=eq.Zh&order=created_at.desc&limit=1'),
+      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=288'), // 24h @ 10хв
+      supa('weather_logs?select=id&limit=1&offset=0'), // просто для count через Range header... скористаємось GET count
+      supa(`weather_logs?select=id&created_at=gte.${new Date(Date.now()-86400000).toISOString()}`)
+    ]);
+
+    setError(null);
+    setLiveDot(true);
+
+    // Картки
+    if (latestLv.length) updateCard('Lv', latestLv[0]);
+    if (latestZh.length) updateCard('Zh', latestZh[0]);
+
+    // Статистика
+    document.getElementById('rows24h').textContent = count24h.length;
+
+    // Граф
+    buildChartData(history);
+    updateChart();
+
+    document.getElementById('lastFetch').textContent =
+      new Date().toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    firstLoad = false;
+
+  } catch (e) {
+    setLiveDot(false);
+    setError('Помилка запиту до Supabase: ' + e.message +
+             '. Перевір SUPABASE_URL і SUPABASE_KEY у коді сторінки.');
+    console.error(e);
+  }
+}
+
+// Count total rows окремо (через HEAD запит)
+async function fetchTotalCount() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/weather_logs?select=id`, {
+      method: 'HEAD',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'count=exact'
+      }
+    });
+    const count = r.headers.get('content-range');
+    if (count) {
+      const total = count.split('/')[1];
+      document.getElementById('totalRows').textContent = total !== '*' ? total : '—';
+    }
+  } catch {}
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Card update
+// ════════════════════════════════════════════════════════════════════
+function updateCard(city, row) {
+  const tempEl  = document.getElementById(`temp-${city}`);
+  const humEl   = document.getElementById(`hum-${city}`);
+  const barEl   = document.getElementById(`humbar-${city}`);
+  const tsEl    = document.getElementById(`ts-${city}`);
+  const cardEl  = document.getElementById(`card-${city}`);
+
+  const sign = row.temp_c > 0 ? '+' : '';
+  tempEl.innerHTML = `${sign}${parseFloat(row.temp_c).toFixed(1)}<span class="unit">°C</span>`;
+  humEl.textContent = `${row.humidity_pct}%`;
+  barEl.style.width = `${row.humidity_pct}%`;
+
+  const ts = new Date(row.timestamp);
+  tsEl.textContent = ts.toLocaleString('uk-UA', {
+    day:'2-digit', month:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+
+  // Flash effect
+  cardEl.classList.remove('updated');
+  void cardEl.offsetWidth; // reflow
+  cardEl.classList.add('updated');
+  setTimeout(() => cardEl.classList.remove('updated'), 1100);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Chart
+// ════════════════════════════════════════════════════════════════════
+function buildChartData(rows) {
+  // Групуємо по timestamps
+  const map = {};
+  rows.forEach(r => {
+    const key = r.timestamp;
+    if (!map[key]) map[key] = {};
+    map[key][r.city] = { temp: r.temp_c, hum: r.humidity_pct };
+  });
+
+  const keys = Object.keys(map).sort();
+  chartData.labels    = keys.map(k => {
+    const d = new Date(k);
+    return d.toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'});
+  });
+  chartData.Lv_temp = keys.map(k => map[k].Lv ? parseFloat(map[k].Lv.temp) : null);
+  chartData.Zh_temp = keys.map(k => map[k].Zh ? parseFloat(map[k].Zh.temp) : null);
+  chartData.Lv_hum  = keys.map(k => map[k].Lv ? map[k].Lv.hum : null);
+  chartData.Zh_hum  = keys.map(k => map[k].Zh ? map[k].Zh.hum : null);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && tab === 'temp') || (i === 1 && tab === 'hum'));
+  });
+  updateChart();
+}
+
+function updateChart() {
+  const isTemp = currentTab === 'temp';
+  const lvData = isTemp ? chartData.Lv_temp : chartData.Lv_hum;
+  const zhData = isTemp ? chartData.Zh_temp : chartData.Zh_hum;
+
+  const chartCfg = {
+    type: 'line',
+    data: {
+      labels: chartData.labels,
+      datasets: [
+        {
+          label: 'Lviv',
+          data: lvData,
+          borderColor: '#f0a500',
+          backgroundColor: 'rgba(240,165,0,0.06)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: '#f0a500',
+          tension: 0.4,
+          fill: true,
+          spanGaps: true,
+        },
+        {
+          label: 'Zhovkva',
+          data: zhData,
+          borderColor: '#00d9ff',
+          backgroundColor: 'rgba(0,217,255,0.05)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: '#00d9ff',
+          tension: 0.4,
+          fill: true,
+          spanGaps: true,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: firstLoad ? 800 : 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d1528',
+          borderColor: '#1a2540',
+          borderWidth: 1,
+          titleColor: '#4a5a78',
+          bodyColor: '#c8d8f0',
+          titleFont: { family: 'Share Tech Mono' },
+          bodyFont: { family: 'Share Tech Mono' },
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y + (isTemp ? ' °C' : ' %') : '—'}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(26,37,64,0.6)', drawTicks: false },
+          ticks: {
+            color: '#4a5a78',
+            font: { family: 'Share Tech Mono', size: 10 },
+            maxTicksLimit: 12,
+            maxRotation: 0,
+          },
+          border: { color: '#1a2540' }
+        },
+        y: {
+          grid: { color: 'rgba(26,37,64,0.6)', drawTicks: false },
+          ticks: {
+            color: '#4a5a78',
+            font: { family: 'Share Tech Mono', size: 10 },
+            callback: v => v + (isTemp ? '°' : '%')
+          },
+          border: { color: '#1a2540', dash: [4,4] }
+        }
+      }
+    }
+  };
+
+  if (chartInstance) {
+    chartInstance.data = chartCfg.data;
+    chartInstance.options = chartCfg.options;
+    chartInstance.update('active');
+  } else {
+    chartInstance = new Chart(document.getElementById('meteoChart'), chartCfg);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  UI helpers
+// ════════════════════════════════════════════════════════════════════
+function setLiveDot(ok) {
+  const dot = document.getElementById('liveDot');
+  const lbl = document.getElementById('liveLabel');
+  dot.className = 'dot' + (ok ? '' : ' err');
+  lbl.textContent = ok ? 'LIVE' : 'ERROR';
+}
+
+function setError(msg) {
+  const el = document.getElementById('errorBanner');
+  if (msg) { el.textContent = msg; el.classList.add('visible'); }
+  else      { el.classList.remove('visible'); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Countdown + auto-refresh
+// ════════════════════════════════════════════════════════════════════
+function tick() {
+  countdown--;
+  if (countdown <= 0) {
+    countdown = REFRESH_SEC;
+    fetchData();
+    fetchTotalCount();
+  }
+  const pct = (countdown / REFRESH_SEC) * 100;
+  document.getElementById('refreshFill').style.width = pct + '%';
+  document.getElementById('countdown').textContent = countdown + 's';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════════════════
+fetchData();
+fetchTotalCount();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
