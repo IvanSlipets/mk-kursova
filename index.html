@@ -8,13 +8,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    /* ── Config ─── замінити на свої ──────────────────────────────── */
     :root {
       --supabase-url: "https://XXXXXXXXXXXXXXXX.supabase.co";
       --supabase-key: "eyJhbGciOi...";
     }
 
-    /* ── Reset & Base ──────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -393,7 +391,7 @@
 const SUPABASE_URL = 'https://vkfsbuxmagaykyrhefpt.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZnNidXhtYWdheWt5cmhlZnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTIxNjcsImV4cCI6MjA5NTM2ODE2N30.N-ZoRxiqXQm39dIsg2nXGn2SacFkDBJIE0STWbxRVps';
 
-const REFRESH_SEC = 5;   // Інтервал оновлення в секундах
+const REFRESH_SEC = 5;
 
 // ════════════════════════════════════════════════════════════════════
 //  State
@@ -423,12 +421,11 @@ async function supa(endpoint) {
 // ════════════════════════════════════════════════════════════════════
 async function fetchData() {
   try {
-    // Останній запис кожного міста
     const [latestLv, latestZh, history, countAll, count24h] = await Promise.all([
       supa('weather_logs?select=*&city=eq.Lv&order=created_at.desc&limit=1'),
       supa('weather_logs?select=*&city=eq.Zh&order=created_at.desc&limit=1'),
-      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=288'), // 24h @ 10хв
-      supa('weather_logs?select=id&limit=1&offset=0'), // просто для count через Range header... скористаємось GET count
+      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=288'),
+      supa('weather_logs?select=id&limit=1&offset=0'),
       supa(`weather_logs?select=id&created_at=gte.${new Date(Date.now()-86400000).toISOString()}`)
     ]);
 
@@ -459,7 +456,7 @@ async function fetchData() {
   }
 }
 
-// Count total rows окремо (через HEAD запит)
+// Count total rows
 async function fetchTotalCount() {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/weather_logs?select=id`, {
@@ -510,7 +507,6 @@ function updateCard(city, row) {
 //  Chart
 // ════════════════════════════════════════════════════════════════════
 function buildChartData(rows) {
-  // Групуємо по timestamps
   const map = {};
   rows.forEach(r => {
     const key = r.timestamp;
@@ -537,6 +533,43 @@ function switchTab(tab) {
   updateChart();
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  Chart
+// ════════════════════════════════════════════════════════════════════
+function buildChartData(rows) {
+  const map = {};
+  
+  rows.forEach(r => {
+    const d = new Date(r.timestamp);
+    const coeff = 1000 * 60 * 5;
+    const rounded = new Date(Math.round(d.getTime() / coeff) * coeff);
+    const key = rounded.toISOString();
+
+    if (!map[key]) map[key] = {};
+    map[key][r.city] = { temp: r.temp_c, hum: r.humidity_pct };
+  });
+
+  const keys = Object.keys(map).sort();
+  
+  chartData.labels = keys.map(k => {
+    const d = new Date(k);
+    return d.toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'});
+  });
+  
+  chartData.Lv_temp = keys.map(k => map[k].Lv ? parseFloat(map[k].Lv.temp) : null);
+  chartData.Zh_temp = keys.map(k => map[k].Zh ? parseFloat(map[k].Zh.temp) : null);
+  chartData.Lv_hum  = keys.map(k => map[k].Lv ? map[k].Lv.hum : null);
+  chartData.Zh_hum  = keys.map(k => map[k].Zh ? map[k].Zh.hum : null);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && tab === 'temp') || (i === 1 && tab === 'hum'));
+  });
+  updateChart();
+}
+
 function updateChart() {
   const isTemp = currentTab === 'temp';
   const lvData = isTemp ? chartData.Lv_temp : chartData.Lv_hum;
@@ -548,28 +581,28 @@ function updateChart() {
       labels: chartData.labels,
       datasets: [
         {
-          label: 'Lviv',
+          label: 'Львів',
           data: lvData,
           borderColor: '#f0a500',
-          backgroundColor: 'rgba(240,165,0,0.06)',
+          backgroundColor: 'rgba(240,165,0,0.03)',
           borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          pointHoverBackgroundColor: '#f0a500',
-          tension: 0.4,
+          pointRadius: 4,               
+          pointBackgroundColor: '#f0a500',
+          pointHoverRadius: 6,
+          tension: 0.2,                 
           fill: true,
-          spanGaps: true,
+          spanGaps: true,              
         },
         {
-          label: 'Zhovkva',
+          label: 'Жовква',
           data: zhData,
           borderColor: '#00d9ff',
-          backgroundColor: 'rgba(0,217,255,0.05)',
+          backgroundColor: 'rgba(0,217,255,0.02)',
           borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          pointHoverBackgroundColor: '#00d9ff',
-          tension: 0.4,
+          pointRadius: 4,         
+          pointBackgroundColor: '#00d9ff',
+          pointHoverRadius: 6,
+          tension: 0.2,
           fill: true,
           spanGaps: true,
         }
@@ -578,7 +611,10 @@ function updateChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      interaction: { 
+        mode: 'index',
+        intersect: false 
+      },
       animation: { duration: firstLoad ? 800 : 300 },
       plugins: {
         legend: { display: false },
@@ -588,8 +624,9 @@ function updateChart() {
           borderWidth: 1,
           titleColor: '#4a5a78',
           bodyColor: '#c8d8f0',
-          titleFont: { family: 'Share Tech Mono' },
-          bodyFont: { family: 'Share Tech Mono' },
+          titleFont: { family: 'Share Tech Mono', size: 12 },
+          bodyFont: { family: 'Share Tech Mono', size: 12 },
+          padding: 10,
           callbacks: {
             label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y + (isTemp ? ' °C' : ' %') : '—'}`
           }
@@ -597,21 +634,21 @@ function updateChart() {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(26,37,64,0.6)', drawTicks: false },
+          grid: { color: 'rgba(26,37,64,0.3)', drawTicks: false },
           ticks: {
             color: '#4a5a78',
-            font: { family: 'Share Tech Mono', size: 10 },
-            maxTicksLimit: 12,
+            font: { family: 'Share Tech Mono', size: 11 },
+            maxTicksLimit: 8,
             maxRotation: 0,
           },
           border: { color: '#1a2540' }
         },
         y: {
-          grid: { color: 'rgba(26,37,64,0.6)', drawTicks: false },
+          grid: { color: 'rgba(26,37,64,0.3)', drawTicks: false },
           ticks: {
             color: '#4a5a78',
-            font: { family: 'Share Tech Mono', size: 10 },
-            callback: v => v + (isTemp ? '°' : '%')
+            font: { family: 'Share Tech Mono', size: 11 },
+            callback: v => v + (isTemp ? '°C' : '%')
           },
           border: { color: '#1a2540', dash: [4,4] }
         }
