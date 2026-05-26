@@ -421,10 +421,10 @@ async function supa(endpoint) {
 async function fetchData() {
   try {
     const [latestLv, latestZh, latestRm, history, count24h] = await Promise.all([
-      supa('weather_logs?select=*&city=eq.Lv&order=created_at.desc&limit=1'),
-      supa('weather_logs?select=*&city=eq.Zh&order=created_at.desc&limit=1'),
-      supa('weather_logs?select=*&city=eq.Rm&order=created_at.desc&limit=1'),
-      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=timestamp.asc&limit=432'),
+      supa('weather_logs?select=*&city=eq.Lv&order=id.desc&limit=1'),
+      supa('weather_logs?select=*&city=eq.Zh&order=id.desc&limit=1'),
+      supa('weather_logs?select=*&city=eq.Rm&order=id.desc&limit=1'),
+      supa('weather_logs?select=timestamp,city,temp_c,humidity_pct&order=id.asc&limit=432'),
       supa(`weather_logs?select=id&created_at=gte.${new Date(Date.now()-86400000).toISOString()}`)
     ]);
 
